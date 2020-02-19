@@ -1,5 +1,6 @@
 import time
 import utime
+import math
 
 def wheel(pos):
   if pos < 0 or pos > 255:
@@ -26,7 +27,7 @@ def demo(np, np_len):
 import machine, neopixel
 from machine import ADC, Pin
 
-np_len = 33
+np_len = 30
 np = neopixel.NeoPixel(machine.Pin(0), np_len)
 
 for i in range(np_len):
@@ -34,7 +35,7 @@ for i in range(np_len):
 
 np.write()
 
-adc = ADC(Pin(32))
+adc = ADC(Pin(33))
 
 rst_pin = Pin(13, mode=Pin.OUT, value=False)
 strobe_pin = Pin(12, mode=Pin.OUT, value=False)
@@ -56,9 +57,14 @@ strobe_pin.value(False)
 
 utime.sleep_us(80) # Strobe to strobe
 
+prevOctave = [0] * 7
 octave = [0] * 7
 
+animation_duration = 5
+lastPeak = [animation_duration] * 7
+
 while True:
+  prevOctave = octave
   for i in range(7):
     strobe_pin.value(True)
     utime.sleep_us(20) # minimum pulse width = 18us
@@ -66,7 +72,36 @@ while True:
     strobe_pin.value(False)
     utime.sleep_us(80) # Strobe to strobe
   
-  print(octave)
+
+  # Save Octave result to LED
+  # 7 bands, np_led leds
+
+  led_per_band = math.floor(np_len / 7)
+
+  offset = 0
+  for i in range(7):
+    # Each octave
+
+    if octave[i] == 0:
+      # PEAK!
+      lastPeak[i] = 0
+      print("octave " + str(i) + ": PEAK!")
+    else:
+      lastPeak[i]+= 1
+      if lastPeak[i] > animation_duration:
+        lastPeak[i] = animation_duration
+
+    threshold = (1 - lastPeak[i] / animation_duration) * led_per_band
+
+    for j in range(led_per_band):
+      if(j+1 <= threshold):
+        rc_index = (offset * 256 // np_len) + j
+        np[offset + j] = wheel(rc_index & 255)
+      else:
+        np[offset + j] = (0, 0, 0)
+    offset = offset + led_per_band
+
+  np.write()
   time.sleep_ms(20)
 
 #demo(np, np_len)
